@@ -1,4 +1,4 @@
-const initializeDB = require('./server')
+const initializeDB = require('./lokkeroom_db')
 const mariadb = require('mariadb');
 require("dotenv").config();
 
