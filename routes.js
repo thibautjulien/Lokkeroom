@@ -59,25 +59,55 @@ router.post('/login', async (req, res) => {
 
     try {
         const db = await initializeDB();
-        const rows = await db.query('SELECT password FROM users WHERE mail = ?', [email]);
+        const rows = await db.query('SELECT * FROM users WHERE mail = ?', [email]);
+        console.log("Rows returned from database:", rows);
 
         if (rows.length === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const hashPassword = rows[0].password; // Récupère le mot de passe haché de la BDD
-        const isMatch = await bcrypt.compare(password, hashPassword); // Compare les mots de passe
+        const user = rows[0];
+        console.log("User object from database:", user); 
+        const hashPassword = user.password; // Récupère le mot de passe haché de la BDD
+        const isMatch = await bcrypt.compare(password, hashPassword); // Compare mdp
 
-        if (isMatch) {
-            console.log('Successful login');
-            res.status(200).json({ message: 'Login successful' });
+        if (isMatch) { // token JWT -> username user
+            const token = jwt.sign({ id: user.id, username: user.username }, process.env.TOKEN_SECRET, { expiresIn: '1h' });
+            //console.log("Generated token:", token); 
+        
+            res.status(200).json({ message: 'Login successful', token });
         } else {
             res.status(401).json({ error: 'Incorrect password' });
         }
     } catch (error) {
-        console.error('Error during login:', error);
-        res.status(500).json({ error: 'Login failed' });
+            res.status(500).json({ error: 'Login failed' });
+    }});
+
+    //Middelware pour routes sécuriser->protéger
+    function authToken(req, res, next) {
+        const authHeader = req.header("Authorization");
+        if (!authHeader) {
+            return res.status(403).json({ error: 'No token provided.' });
+        }
+    
+        const token = authHeader.split(' ')[1]; // Récupère le token après "Bearer"
+        if (!token) {
+            console.log("Auth header:", authHeader);
+            return res.status(403).json({ error: 'Malformed token' });
+        }
+    
+        jwt.verify(token, process.env.TOKEN_SECRET, (err, user) => {
+            if (err) {
+                console.log("Token verification error:", err); 
+                return res.status(403).json({ error: 'Invalid token' });
+            }    
+            req.user = user; 
+            next();
+        });
     }
-});
+    
+    router.get('/id', authToken, (req, res) => {
+        res.status(200).json({ message: `Welcome, user ${req.user.username}`});
+    });
 
 module.exports = router;
