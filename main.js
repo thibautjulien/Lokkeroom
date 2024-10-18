@@ -2,7 +2,8 @@ const initializeDB = require('./lokkeroom_db')
 const mariadb = require('mariadb');
 require("dotenv").config();
 
-async function connectToDB() { // Créer la connexion à la base de données
+async function connectToDB() { 
+    // Créer la connexion à la base de données
     try {
         db = await mariadb.createConnection({
             host: 'localhost',

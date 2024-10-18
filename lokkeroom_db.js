@@ -41,8 +41,8 @@ async function checkTableUsers(db) {
                 (id INT PRIMARY KEY AUTO_INCREMENT,
                 username VARCHAR(20) NOT NULL,
                 mail VARCHAR(35) NOT NULL,
-                password VARCHAR(35) NOT NULL,
-                created_at TIMESTAMP NOT NULL);`);
+                password VARCHAR(255) NOT NULL,
+                statut ENUM('member', 'admin') DEFAULT 'member');`);
     
             console.log('[Lokkeroom-Database] : The table "users" was successfully created.');
         }
@@ -119,7 +119,8 @@ async function checkTableLobbies(db) {
             await db.query(`
                 CREATE TABLE lobbies
                 (id INT PRIMARY KEY AUTO_INCREMENT,
-                admin_id INT NOT NULL);`);
+                admin_id INT NOT NULL, 
+                message TEXT NOT NULL);`);
     
             console.log('[Lokkeroom-Database] : The table "lobbies" was successfully created.');
         }
