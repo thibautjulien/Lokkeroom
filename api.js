@@ -14,6 +14,7 @@ app.use(bodyParser.json());
 app.use('/auth', authRoutes); // Utiliser authRoutes au lieu de router
 app.use('/login', authRoutes);
 app.use('/register', authRoutes);
+app.use('/lobby',authRoutes)
 
 app.get('/test', (req, res) => {
     res.send("OK");

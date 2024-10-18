@@ -133,7 +133,7 @@ async function checkTableLobbies(db) {
 async function addForeignKeys(db) {
     try {
 
-        await db.query(`ALTER TABLE posts ADD FOREIGN KEY (id) REFERENCES users (id);`);
+        await db.query(`ALTER TABLE posts ADD FOREIGN KEY (user_id) REFERENCES users (id);`);
         await db.query(`ALTER TABLE access ADD FOREIGN KEY (user_id) REFERENCES users (id);`);
         await db.query(`ALTER TABLE lobbies ADD FOREIGN KEY (admin_id) REFERENCES users (id);`);
         await db.query(`ALTER TABLE posts ADD FOREIGN KEY (lobby_id) REFERENCES lobbies (id);`);
