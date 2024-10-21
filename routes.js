@@ -5,6 +5,7 @@ const User = require("./models/User");
 const Lobby = require("./models/Lobby");
 const { getMessageById } = require("./models/Post");
 const Post = require("./models/Post");
+const Access = require("./models/Access");
 
 const router = express.Router();
 
@@ -57,12 +58,15 @@ router.get("/lobby", authToken, async (req, res) => {
   try {
     await Lobby.createLobby(email);
     res.status(200).json({ message: "Lobby created" });
+    const id_admin = await User.getId(email);
+    const id_lobby = await Lobby.getLastLobbyIdByUser(email);
+    await Access.addAdmin(id_admin, id_lobby);
   } catch (error) {
     res.status(500).json({ error: "Failed to create lobby" });
   }
 });
 // Route to get all messages by lobby_id(GET /lobby)
-router.get("/lobby/:lobby_id", async (req, res, next) => {
+router.get("/lobby/:lobby_id", authToken, async (req, res, next) => {
   try {
     const { lobby_id } = req.params;
     const messages = await Lobby.getLobbyMessagesById(lobby_id);
@@ -76,7 +80,7 @@ router.get("/lobby/:lobby_id", async (req, res, next) => {
 });
 
 // Route to get a specific message from a lobby
-router.get("/lobby/:lobby_id/:post_id", async (req, res, next) => {
+router.get("/lobby/:lobby_id/:post_id", authToken, async (req, res, next) => {
   try {
     const { post_id } = req.params;
     const message = await Post.getMessageById(post_id);
@@ -108,29 +112,135 @@ router.post("/lobby/:lobby_id", authToken, async (req, res) => {
   try {
     const isAdmin = await Lobby.verifAdmin(email, lobby_id);
     if (!isAdmin) {
-        return res.status(403).json({ error: "You are not the admin of this lobby" });
+      return res
+        .status(403)
+        .json({ error: "You are not the admin of this lobby" });
     }
-      
+
     const verifMsg = await Lobby.verifMessage(lobby_id);
 
     if (verifMsg.length > 0) {
       await Lobby.createMessage(message, lobby_id);
-      return res
-        .status(200)
-        .json({ message: "Message updated successfully" });
+      return res.status(200).json({ message: "Message updated successfully" });
     } else {
       await Lobby.createMessage(message, lobby_id);
-      return res
-        .status(201)
-        .json({ message: "Message created successfully" });
+      return res.status(201).json({ message: "Message created successfully" });
     }
-    
   } catch (error) {
     console.error("Error while posting/updating lobby message:", error);
     res
       .status(500)
       .json({ error: "An error occurred while handling the lobby message" });
     res;
+  }
+});
+
+//Route to Add a user to a lobby
+router.post("/lobby/:lobby_id/add-user", authToken, async (req, res, next) => {
+  const lobby_id = req.params.lobby_id;
+  const { id } = req.body;
+  const email = req.user.email;
+  if (!id) {
+    return res.status(400).json({ error: "Missing required fields: id " });
+  }
+  try {
+    const isAdmin = await Lobby.verifAdmin(email, lobby_id);
+    if (!isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You are not the admin of this lobby" });
+    }
+    const result = await Access.addUser(lobby_id, id);
+    if (result.affectedRows > 0) {
+      return res
+        .status(201)
+        .json({ message: "User added to the lobby successfully" });
+    } else {
+      return res.status(500).json({ error: "Failed to add user to the lobby" });
+    }
+  } catch (error) {
+    console.error("Error while adding user to lobby:", error);
+  }
+});
+
+//Route to remove a user to a lobby
+router.post(
+  "/lobby/:lobby_id/remove-user",
+  authToken,
+  async (req, res, next) => {
+    const lobby_id = req.params.lobby_id;
+    const { id } = req.body;
+    const email = req.user.email;
+    if (!id) {
+      return res.status(400).json({ error: "Missing required fields: id " });
+    }
+    try {
+      const isAdmin = await Lobby.verifAdmin(email, lobby_id);
+      if (!isAdmin) {
+        return res
+          .status(403)
+          .json({ error: "You are not the admin of this lobby" });
+      }
+      const result = await Access.removeUser(lobby_id, id);
+      if (result.affectedRows > 0) {
+        return res
+          .status(201)
+          .json({ message: "User deleted to the lobby successfully" });
+      } else {
+        return res.status(500).json({ error: "Failed to remove to the lobby" });
+      }
+    } catch (error) {
+      console.error("Error while removing user to lobby:", error);
+    }
+  }
+);
+
+//Route to show all users in a specific lobby
+router.get("/users", authToken, async (req, res) => {
+  try {
+    const email = req.user.email;
+
+    // Récupérer tous les lobbies auxquels cet utilisateur a accès
+    const allLobbies = await Access.showAllUser(email);
+
+    // Vérifier s'il a accès à au moins un lobby
+    if (allLobbies.length === 0) {
+      return res.status(404).json({ error: "User is not part of any lobby." });
+    }
+
+    const lobbyUsers = [];
+
+    // Récupérer les utilisateurs pour chaque lobby
+    for (const lobby of allLobbies) {
+      const lobby_id = lobby.lobby_id;
+
+      // Vérifier si l'utilisateur est admin pour ce lobby
+      const isAdmin = await Lobby.verifAdmin(email, lobby_id);
+      if (!isAdmin) {
+        continue; // Passer au lobby suivant s'il n'est pas admin de ce lobby
+      }
+
+      // Obtenir les utilisateurs de ce lobby
+      const users = await Lobby.getUsersLobbyById(lobby_id);
+
+      if (users.length > 0) {
+        lobbyUsers.push({
+          lobby_id: lobby_id,
+          users: users,
+        });
+      }
+    }
+
+    // Si aucun utilisateur n'a été trouvé
+    if (lobbyUsers.length === 0) {
+      return res.status(404).json({ error: "No users found in any lobbies." });
+    }
+
+    // Renvoyer les utilisateurs par lobby
+    res.json(lobbyUsers);
+  } catch (error) {
+    console.error("Error fetching users for lobby:", error);
+    res.status(500).json({ error: "An error occurred while fetching users." });
   }
 });
 

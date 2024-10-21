@@ -9,14 +9,13 @@ async function connectToDB() {
       password: process.env.PASSWORD_DB,
       database: "lokkeroom",
     });
-    
+
     return db;
   } catch (err) {
     console.log("[Lokkeroom-Database] : Connection failed.", err);
   }
 }
 class User {
-
   static async createUser(email, username, password) {
     const hashPassword = await bcrypt.hash(password, 10);
     const conn = await connectToDB();
@@ -54,15 +53,14 @@ class User {
       console.error("Error during login:", error);
     }
   }
-  static async getId(email){
+  static async getId(email) {
     try {
       const conn = await connectToDB();
-      const rows = await conn.query(
-        "SELECT id FROM users WHERE mail = ?",
-        [email]
-      );
+      const rows = await conn.query("SELECT id FROM users WHERE mail = ?", [
+        email,
+      ]);
       if (rows.length > 0) {
-        return rows[0].id; 
+        return rows[0].id;
       } else {
         throw new Error("User not found");
       }

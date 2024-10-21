@@ -9,7 +9,7 @@ async function connectToDB() {
       password: process.env.PASSWORD_DB,
       database: "lokkeroom",
     });
-    
+
     return db;
   } catch (err) {
     console.log("[Lokkeroom-Database] : Connection failed.", err);
@@ -65,19 +65,63 @@ class Lobby {
       throw new Error("Error to get message of lobby");
     }
   }
-  static async verifAdmin(email,lobby_id) {
+  static async verifAdmin(email, lobby_id) {
     const conn = await connectToDB();
     try {
       const idToCheck = await User.getId(email);
-      const [lobby] = await conn.query("SELECT admin_id FROM lobbies WHERE id = ?", [lobby_id]);
+      const [lobby] = await conn.query(
+        "SELECT admin_id FROM lobbies WHERE id = ?",
+        [lobby_id]
+      );
 
-        // Vérifier si le lobby existe et si l'admin_id correspond à l'ID de l'utilisateur
-        if (lobby && lobby.admin_id === idToCheck) {
-            return true;
-        }
-        return false; 
+      // Vérifier si le lobby existe et si l'admin_id correspond à l'ID de l'utilisateur
+      if (lobby && lobby.admin_id === idToCheck) {
+        return true;
+      }
+      return false;
     } catch (error) {
       throw new Error("Error to verif if is it an admin");
+    }
+  }
+  static async getUsersLobbyById(lobby_id) {
+    try {
+      const conn = await connectToDB();
+      const result = await conn.query(
+        `
+        SELECT u.id, u.username 
+        FROM access a 
+        JOIN users u ON a.user_id = u.id 
+        WHERE a.lobby_id = ?`,
+        [lobby_id]
+      );
+      return result;
+    } catch (error) {
+      console.error("Error getting lobby users:", error);
+      throw new Error("Failed to retrieve users for the specified lobby.");
+    }
+  }
+
+  static async getLastLobbyIdByUser(email) {
+    const conn = await connectToDB();
+    try {
+      // Récupérer l'ID de l'utilisateur à partir de l'email
+      const userId = await User.getId(email);
+
+      // Rechercher le dernier lobby créé par cet utilisateur
+      const result = await conn.query(
+        "SELECT id FROM lobbies WHERE admin_id = ? ORDER BY id DESC LIMIT 1",
+        [userId]
+      );
+
+      // Vérifier si un lobby est trouvé et retourner son ID
+      if (result.length > 0) {
+        return result[0].id;
+      } else {
+        throw new Error("No lobby found for this user");
+      }
+    } catch (error) {
+      console.error("Error getting last lobby ID:", error);
+      throw new Error("Failed to get last lobby ID");
     }
   }
 }
