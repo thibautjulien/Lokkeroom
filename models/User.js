@@ -9,7 +9,7 @@ async function connectToDB() {
       password: process.env.PASSWORD_DB,
       database: "lokkeroom",
     });
-    console.log("[Lokkeroom-Database] : Connected to the database.");
+    
     return db;
   } catch (err) {
     console.log("[Lokkeroom-Database] : Connection failed.", err);

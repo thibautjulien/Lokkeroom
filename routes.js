@@ -54,7 +54,6 @@ router.post("/login", async (req, res) => {
 //Route to create a lobby
 router.get("/lobby", authToken, async (req, res) => {
   const email = req.user.email;
-  console.log(email);
   try {
     await Lobby.createLobby(email);
     res.status(200).json({ message: "Lobby created" });
@@ -96,9 +95,10 @@ router.get("/lobby/:lobby_id/:post_id", async (req, res, next) => {
   }
 });
 //Route to add message lobby and the statement
-router.post("/lobby/:lobby_id", async (req, res) => {
+router.post("/lobby/:lobby_id", authToken, async (req, res) => {
   const { message } = req.body;
   const { lobby_id } = req.params;
+  const email = req.user.email;
 
   // Vérification des champs requis
   if (!message || !lobby_id) {
@@ -106,20 +106,31 @@ router.post("/lobby/:lobby_id", async (req, res) => {
   }
 
   try {
+    const isAdmin = await Lobby.verifAdmin(email, lobby_id);
+    if (!isAdmin) {
+        return res.status(403).json({ error: "You are not the admin of this lobby" });
+    }
+      
     const verifMsg = await Lobby.verifMessage(lobby_id);
 
     if (verifMsg.length > 0) {
       await Lobby.createMessage(message, lobby_id);
-      return res.status(200).json({ message: "Message updated successfully" });
+      return res
+        .status(200)
+        .json({ message: "Message updated successfully" });
     } else {
       await Lobby.createMessage(message, lobby_id);
-      return res.status(201).json({ message: "Message created successfully" });
+      return res
+        .status(201)
+        .json({ message: "Message created successfully" });
     }
+    
   } catch (error) {
     console.error("Error while posting/updating lobby message:", error);
     res
       .status(500)
       .json({ error: "An error occurred while handling the lobby message" });
+    res;
   }
 });
 
