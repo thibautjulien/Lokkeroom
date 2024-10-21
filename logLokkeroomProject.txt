@@ -1,0 +1,37 @@
+{
+    "email": "neoMatrix123@example.com",
+    "username": "NeoOne",
+    "password": "Tr1n1tyForever!"
+}
+{
+    "email": "oracleSeer99@example.com",
+    "username": "OracleVision",
+    "password": "Difficult2Guess!"
+}
+{
+    "email": "morpheusDreamer@example.com",
+    "username": "MorpheusX",
+    "password": "RedOrBluePill#42"
+}
+{
+    "email": "trinityHacker@example.com",
+    "username": "Trinity_Reloaded",
+    "password": "Unbr3akable@Key"
+}
+{
+    "email": "smithAgent47@example.com",
+    "username": "Agent47",
+    "password": "SecurePassword$007"
+}
+{
+    "email": "architectGenius@example.com",
+    "username": "Architect_01",
+    "password": "DesignsOfDestiny!"
+}
+{
+    "email": "zionSurvivor2024@example.com",
+    "username": "ZionFreedom",
+    "password": "Resistance1234"
+}
+
+

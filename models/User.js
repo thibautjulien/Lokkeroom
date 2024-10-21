@@ -54,6 +54,22 @@ class User {
       console.error("Error during login:", error);
     }
   }
+  static async getId(email){
+    try {
+      const conn = await connectToDB();
+      const rows = await conn.query(
+        "SELECT id FROM users WHERE mail = ?",
+        [email]
+      );
+      if (rows.length > 0) {
+        return rows[0].id; 
+      } else {
+        throw new Error("User not found");
+      }
+    } catch (error) {
+      console.error("Error during login:", error);
+    }
+  }
 }
 
 module.exports = User;

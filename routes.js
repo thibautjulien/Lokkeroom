@@ -39,7 +39,10 @@ router.post("/login", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
     if (user === 0) {
-      res.status(200).json({ message: "Login successful" });
+      const token = await jwt.sign({ email: email }, process.env.TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res.status(200).json({ message: "Login successful", token });
     } else {
       res.status(401).json({ error: "Incorrect password" });
     }
@@ -48,23 +51,30 @@ router.post("/login", async (req, res) => {
   }
 });
 
-//Route to create a lobby 
-router.get('/lobby', authToken, async (req, res) => {
-  Lobby.createLobby(req)
-  res.status(200).json({ message: "Lobby created" });
-})
-// Route to get all messages by if (GET /lobby)
-router.get("/lobby/:lobby_id", async (req, res,next) =>{
+//Route to create a lobby
+router.get("/lobby", authToken, async (req, res) => {
+  const email = req.user.email;
+  console.log(email);
   try {
-    const {lobby_id} = req.params
-    const messages = await Lobby.getLobbyMessagesById(lobby_id)
-    res.json(messages)
-  }catch(error){
-    console.error("Error fetching lobby messages:", error);
-    res.status(500).json({ error: "An error occurred while fetching lobby messages" });
+    await Lobby.createLobby(email);
+    res.status(200).json({ message: "Lobby created" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create lobby" });
   }
-  
-})
+});
+// Route to get all messages by lobby_id(GET /lobby)
+router.get("/lobby/:lobby_id", async (req, res, next) => {
+  try {
+    const { lobby_id } = req.params;
+    const messages = await Lobby.getLobbyMessagesById(lobby_id);
+    res.json(messages);
+  } catch (error) {
+    console.error("Error fetching lobby messages:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching lobby messages" });
+  }
+});
 
 // Route to get a specific message from a lobby
 router.get("/lobby/:lobby_id/:post_id", async (req, res, next) => {
@@ -80,7 +90,58 @@ router.get("/lobby/:lobby_id/:post_id", async (req, res, next) => {
     }
   } catch (error) {
     console.error("Error fetching lobby message:", error);
-    res.status(500).json({ error: "An error occurred while fetching the message" });
+    res
+      .status(500)
+      .json({ error: "An error occurred while fetching the message" });
   }
 });
+//Route to add message lobby and the statement
+router.post("/lobby/:lobby_id", async (req, res) => {
+  const { message } = req.body;
+  const { lobby_id } = req.params;
+
+  // Vérification des champs requis
+  if (!message || !lobby_id) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
+    const verifMsg = await Lobby.verifMessage(lobby_id);
+
+    if (verifMsg.length > 0) {
+      await Lobby.createMessage(message, lobby_id);
+      return res.status(200).json({ message: "Message updated successfully" });
+    } else {
+      await Lobby.createMessage(message, lobby_id);
+      return res.status(201).json({ message: "Message created successfully" });
+    }
+  } catch (error) {
+    console.error("Error while posting/updating lobby message:", error);
+    res
+      .status(500)
+      .json({ error: "An error occurred while handling the lobby message" });
+  }
+});
+
+async function authToken(req, res, next) {
+  const authHeader = req.header("Authorization");
+  if (!authHeader) {
+    return res.status(403).json({ error: "No token provided." });
+  }
+
+  const token = authHeader.split(" ")[1]; // Récupère le token après "Bearer"
+  if (!token) {
+    console.log("Auth header:", authHeader);
+    return res.status(403).json({ error: "Malformed token" });
+  }
+
+  jwt.verify(token, process.env.TOKEN_SECRET, (err, user) => {
+    if (err) {
+      console.log("Token verification error:", err);
+      return res.status(403).json({ error: "Invalid token" });
+    }
+    req.user = user;
+    next();
+  });
+}
 module.exports = router;
