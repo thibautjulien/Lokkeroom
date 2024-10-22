@@ -128,6 +128,36 @@ class User {
       console.error("error:", error);
     }
   }
+
+  static async changePassword(user_id, oldPwd, newPwd) {
+    const conn = await connectToDB();
+    try {
+      const user = await conn.query(
+        "SELECT password FROM users WHERE id = ?",
+        user_id
+      );
+      if (user.length === 0) {
+        throw new Error("User not found");
+      }
+
+      const isMatch = await bcrypt.compare(oldPwd, user[0].password);
+      if (!isMatch) {
+        throw new Error("Old password is incorrect");
+      }
+
+      const hashedNewPassword = await bcrypt.hash(newPwd, 10);
+      await conn.query("UPDATE users SET password = ? WHERE id = ?", [
+        hashedNewPassword,
+        user_id,
+      ]);
+
+      console.log("Password updated successfully");
+      return { message: "Password updated successfully" };
+    } catch (error) {
+      console.error("Error updating password:", error.message);
+      throw new Error("Failed to update password: " + error.message);
+    }
+  }
 }
 
 module.exports = User;
