@@ -68,6 +68,7 @@ class User {
       console.error("Error during login:", error);
     }
   }
+
   static async getUserById(id) {
     try {
       const conn = await connectToDB();
@@ -78,6 +79,53 @@ class User {
       return result;
     } catch (error) {
       console.error("Error: ", error);
+    }
+  }
+
+  static async verifUsername(username) {
+    const conn = await connectToDB();
+    try {
+      const usernameToCheck = await conn.query(
+        "SELECT username FROM users WHERE username = ? ",
+        username
+      );
+      if (usernameToCheck.length > 0) {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Cannot get username:", error);
+      throw new Error("Database error");
+    }
+  }
+  static async verifEmail(email) {
+    const conn = await connectToDB();
+    try {
+      const emailToCheck = await conn.query(
+        "SELECT mail FROM users WHERE mail = ?",
+        email
+      );
+      if (emailToCheck.length > 0) {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Cannot get email:", error);
+      throw new Error("Database error");
+    }
+  }
+
+  static async getUserEmailById(id) {
+    try {
+      const conn = await connectToDB();
+      const result = conn.query(
+        `
+        SELECT mail FROM users WHERE id = ?`,
+        [id]
+      );
+      return result;
+    } catch (error) {
+      console.error("error:", error);
     }
   }
 }

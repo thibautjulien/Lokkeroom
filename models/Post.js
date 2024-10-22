@@ -30,20 +30,13 @@ class Post {
     }
   }
 
-  static async getMessageWithEmailById(id) {
+  static async getMessageByUserId(id) {
     try {
       const conn = await connectToDB();
       const result = await conn.query(
-        `SELECT u.mail, p.content FROM posts p JOIN users u ON p.user_id = u.id WHERE u.id = ?`,
+        `SELECT p.content, p.created_at, p.updated_at FROM posts p JOIN users u ON p.user_id = u.id WHERE u.id = ?`,
         [id]
       );
-      /*  const result = await conn.query(
-        `SELECT u.username, u.mail, p.content
-        FROM posts p
-        JOIN users u ON p.user_id = u.id
-        WHERE u.id = ?;`,
-        [id]
-      ); */
       return result;
     } catch (error) {
       console.error("Error:", error);

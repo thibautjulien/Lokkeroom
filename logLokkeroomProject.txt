@@ -35,3 +35,8 @@
 }
 
 
+http://localhost:3000/auth/lobby/1/add-user
+
+"email": "mAndersonRobot@example.com",
+    "password": "impossibleToHackme"
+

@@ -6,10 +6,10 @@ const Lobby = require("./models/Lobby");
 const { getMessageById } = require("./models/Post");
 const Post = require("./models/Post");
 const Access = require("./models/Access");
-
+const loginAttempts = {};
 const router = express.Router();
 
-// Route d'inscription (POST /register)
+// Route to register (POST /register)
 router.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   console.log(req.body);
@@ -17,16 +17,29 @@ router.post("/register", async (req, res) => {
   if (!email || !username || !password) {
     return res.status(400).json({ error: "Missing required fields" });
   }
-
   try {
-    User.createUser(email, username, password);
+    const emailExists = await User.verifEmail(email);
+    const usernameExists = await User.verifUsername(username);
+
+    if (!emailExists) {
+      return res
+        .status(400)
+        .json({ error: "This email has an account! Please login" });
+    }
+
+    if (!usernameExists) {
+      return res
+        .status(400)
+        .json({ error: "This username already exists! Please try another" });
+    }
+    await User.createUser(email, username, password);
     res.status(201).json({ message: "Successfully registered" });
   } catch (error) {
     res.status(500).json({ error: "Registration failed" });
   }
 });
 
-// Route de connexion (POST /login)
+// Route to login (POST /login)
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -34,18 +47,45 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
+  const maxAttempts = 5;
+  const timeBetweenMaxAttempts = 60 * 60 * 1000;
+
+  const userAttempts = loginAttempts[email] || { count: 0, blockedUntil: null };
+
+  if (
+    userAttempts.blockedUntil != null &&
+    userAttempts.blockedUntil > Date.now()
+  ) {
+    return res
+      .status(429)
+      .json({ error: "Too many attempts, try again later (1 hour)" });
+  }
+
   try {
     const user = await User.getUserbyEmail(email, password);
+
     if (user === 2) {
       return res.status(404).json({ error: "User not found" });
     }
+
     if (user === 0) {
-      const token = await jwt.sign({ email: email }, process.env.TOKEN_SECRET, {
+      const token = await jwt.sign({ email }, process.env.TOKEN_SECRET, {
         expiresIn: "1h",
       });
-      res.status(200).json({ message: "Login successful", token });
+      delete loginAttempts[email];
+      return res.status(200).json({ message: "Login successful", token });
     } else {
-      res.status(401).json({ error: "Incorrect password" });
+      userAttempts.count++;
+      userAttempts.lastAttempt = Date.now();
+
+      if (userAttempts.count >= maxAttempts) {
+        userAttempts.blockedUntil = Date.now() + timeBetweenMaxAttempts;
+        return res
+          .status(429)
+          .json({ error: "Too many attempts, try again later" });
+      }
+      loginAttempts[email] = userAttempts;
+      return res.status(401).json({ error: "Incorrect password" });
     }
   } catch (error) {
     res.status(500).json({ error: "Login failed" });
@@ -199,44 +239,53 @@ router.post(
 router.get("/users", authToken, async (req, res) => {
   try {
     const email = req.user.email;
-
-    // Récupérer tous les lobbies auxquels cet utilisateur a accès
     const allLobbies = await Access.showAllUser(email);
 
-    // Vérifier s'il a accès à au moins un lobby
     if (allLobbies.length === 0) {
       return res.status(404).json({ error: "User is not part of any lobby." });
     }
 
     const lobbyUsers = [];
 
-    // Récupérer les utilisateurs pour chaque lobby
     for (const lobby of allLobbies) {
       const lobby_id = lobby.lobby_id;
-
-      // Vérifier si l'utilisateur est admin pour ce lobby
+      const lobbyMsg = lobby.message;
       const isAdmin = await Lobby.verifAdmin(email, lobby_id);
-      if (!isAdmin) {
-        continue; // Passer au lobby suivant s'il n'est pas admin de ce lobby
-      }
 
-      // Obtenir les utilisateurs de ce lobby
-      const users = await Lobby.getUsersLobbyById(lobby_id);
-
-      if (users.length > 0) {
+      let users;
+      if (isAdmin) {
+        users = await Lobby.getUsersLobbyByIdForAdmin(lobby_id);
         lobbyUsers.push({
           lobby_id: lobby_id,
+          message: lobbyMsg,
           users: users,
+        });
+      } else {
+        users = await Lobby.getUsersLobbyByIdForMember(lobby_id);
+        const messages = [];
+
+        for (const user of users) {
+          if (user.mail !== email) {
+            messages.push({
+              username: user.username,
+              message: user.content,
+              role: user.role,
+            });
+          }
+        }
+
+        lobbyUsers.push({
+          lobby_id: lobby_id,
+          lobbyMsg: lobbyMsg,
+          messages: messages,
         });
       }
     }
 
-    // Si aucun utilisateur n'a été trouvé
     if (lobbyUsers.length === 0) {
       return res.status(404).json({ error: "No users found in any lobbies." });
     }
 
-    // Renvoyer les utilisateurs par lobby
     res.json(lobbyUsers);
   } catch (error) {
     console.error("Error fetching users for lobby:", error);
@@ -254,35 +303,34 @@ router.get("/users/:user_id", authToken, async (req, res) => {
 
     // Vérifier s'il a accès à au moins un lobby
     if (allLobbies.length === 0) {
-      return res.status(404).json({ error: "User  is not part of any lobby." });
+      return res.status(404).json({ error: "User is not part of any lobby." });
     }
 
+    // On suppose qu'un utilisateur ne peut appartenir qu'à un lobby à la fois.
     const lobbyUsers = [];
 
-    // Récupère les utilisateurs de chaque lobby
     for (const lobby of allLobbies) {
       const lobby_id = lobby.lobby_id;
 
       // Vérifier si l'utilisateur est admin ou non
       const isAdmin = await Lobby.verifAdmin(email, lobby_id);
 
-      // Obtenir les utilisateurs de ce lobby
+      // Obtenir les détails de l'utilisateur
       const user = await User.getUserById(id);
-      const messages = await Post.getMessageById(id);
-      const messagesWithEmail = await Post.getMessageWithEmailById(id);
-
-      console.log(messages);
+      const mail = await User.getUserEmailById(id);
+      const messages = await Post.getMessageByUserId(id);
 
       if (isAdmin) {
         lobbyUsers.push({
           id: id,
-          user: user,
-          messages: messagesWithEmail,
+          username: user[0].username,
+          email: mail[0].mail,
+          messages: messages,
         });
       } else {
         lobbyUsers.push({
           id: id,
-          user: user,
+          username: user[0].username,
           messages: messages,
         });
       }
@@ -293,7 +341,8 @@ router.get("/users/:user_id", authToken, async (req, res) => {
       return res.status(404).json({ error: "No users found." });
     }
 
-    res.json(lobbyUsers);
+    // Retourner un seul utilisateur au lieu d'un tableau
+    res.json(lobbyUsers[0]);
   } catch (error) {
     console.error("Error fetching user:", error);
     res.status(500).json({ error: "An error occurred while fetching user." });
