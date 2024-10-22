@@ -17,9 +17,18 @@ router.post("/register", async (req, res) => {
   if (!email || !username || !password) {
     return res.status(400).json({ error: "Missing required fields" });
   }
-
   try {
-    User.createUser(email, username, password);
+    const emailExists = await User.verifEmail(email);
+    const usernameExists = await User.verifUsername(username);
+
+    if (!emailExists) {
+      return res.status(400).json({ error: "This email has an account! Please login" });
+    }
+
+    if (!usernameExists) {
+      return res.status(400).json({ error: "This username already exists! Please try another" });
+    }
+    await User.createUser(email, username, password);
     res.status(201).json({ message: "Successfully registered" });
   } catch (error) {
     res.status(500).json({ error: "Registration failed" });
@@ -39,7 +48,10 @@ router.post("/login", async (req, res) => {
 
   const userAttempts = loginAttempts[email] || { count: 0, blockedUntil: null };
 
-  if (userAttempts.blockedUntil && userAttempts.blockedUntil > Date.now()) {
+  if (
+    userAttempts.blockedUntil != null &&
+    userAttempts.blockedUntil > Date.now()
+  ) {
     return res
       .status(429)
       .json({ error: "Too many attempts, try again later (15 minutes)" });
