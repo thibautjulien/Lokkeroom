@@ -97,6 +97,22 @@ class Access {
       throw new Error("Failed to add admin to lobby: " + error.message);
     }
   }
+  static async verifAcces(user_id, lobby_id) {
+    const conn = await connectToDB();
+    try {
+      const result = await conn.query(
+        "SELECT * FROM access WHERE user_id = ? AND lobby_id = ? ",
+        [user_id, lobby_id]
+      );
+      if (result.length === 0) {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Error verifying access:", error);
+      throw new Error("Database error while verifying access");
+    }
+  }
 }
 
 module.exports = Access;

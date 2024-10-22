@@ -382,6 +382,95 @@ router.post("/users/changePassword", authToken, async (req, res) => {
   }
 });
 
+//Route to add message for a member
+router.post("/lobby/:lobby_id/add-message", authToken, async (req, res) => {
+  const email = req.user.email;
+  const lobby_id = req.params.lobby_id;
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+  try {
+    const user_id = await User.getId(email);
+    const hasAccess = await Access.verifAcces(user_id, lobby_id);
+    const isExist = await Post.verifExistingPost(user_id, lobby_id);
+    if (!hasAccess) {
+      return res
+        .status(403)
+        .json({ error: "User does not have access to this lobby" });
+    }
+    if (isExist) {
+      return res.status(403).json({
+        error: "you can add one message by lobby , please use modify",
+      });
+    }
+    await Post.addPost(user_id, lobby_id, content);
+    return res.status(200).json({ message: "Message added successfully" });
+  } catch (error) {
+    console.error("Error adding message content:", error);
+    return res.status(500).json({ error: "Failed to add message content" });
+  }
+});
+//Route to modify message for a member
+router.post("/lobby/:lobby_id/modify-message", authToken, async (req, res) => {
+  const email = req.user.email;
+  const lobby_id = req.params.lobby_id;
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+  try {
+    const user_id = await User.getId(email);
+    const hasAccess = await Access.verifAcces(user_id, lobby_id);
+    if (!hasAccess) {
+      return res
+        .status(403)
+        .json({ error: "User does not have access to this lobby" });
+    }
+    await Post.modifyContent(user_id, lobby_id, content);
+    return res
+      .status(200)
+      .json({ message: "Message content updated successfully" });
+  } catch (error) {
+    console.error("Error impossible modify message content:", error);
+    return res.status(500).json({ error: "Failed to modify message content" });
+  }
+});
+//Route to delete message for a member
+router.delete(
+  "/lobby/:lobby_id/delete-message",
+  authToken,
+  async (req, res) => {
+    const email = req.user.email;
+    const lobby_id = req.params.lobby_id;
+
+    try {
+      const user_id = await User.getId(email);
+
+      // Vérifier si l'utilisateur a accès au lobby
+      const hasAccess = await Access.verifAcces(user_id, lobby_id);
+      if (!hasAccess) {
+        return res
+          .status(403)
+          .json({ error: "User does not have access to this lobby" });
+      }
+
+      // Vérifier si le message existe avant de le supprimer
+      const isExist = await Post.verifExistingPost(user_id, lobby_id);
+      if (!isExist) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Supprimer le message
+      await Post.deletePost(user_id, lobby_id); // Assurez-vous que cette méthode existe dans votre classe Post
+      return res.status(200).json({ message: "Message deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      return res.status(500).json({ error: "Failed to delete message" });
+    }
+  }
+);
+
 async function authToken(req, res, next) {
   const authHeader = req.header("Authorization");
   if (!authHeader) {
