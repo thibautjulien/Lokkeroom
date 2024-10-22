@@ -28,6 +28,19 @@ class Post {
       console.error(`Error to get message from id:${id}`, error);
     }
   }
+  static async initPost(user_id, lobby_id) {
+    const conn = await connectToDB();
+    try {
+      const firstPost = await conn.query(
+        "INSERT INTO posts (content,user_id,lobby_id,created_at,updated_at) VALUES (?, ?, ?,CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        ["", user_id, lobby_id]
+      );
+      console.log("first post successfully registered");
+      return firstPost;
+    } catch (error) {
+      console.error("Error during registration:", error);
+    }
+  }
 }
 
 module.exports = Post;

@@ -192,6 +192,7 @@ router.post("/lobby/:lobby_id/add-user", authToken, async (req, res, next) => {
     }
     const result = await Access.addUser(lobby_id, id);
     if (result.affectedRows > 0) {
+      await Post.initPost(id, lobby_id);
       return res
         .status(201)
         .json({ message: "User added to the lobby successfully" });
@@ -294,7 +295,7 @@ router.get("/users", authToken, async (req, res) => {
 });
 
 //Route Admin add people that have not yet registered to the platform.
-router.get(
+router.post(
   "/lobby/:lobby_id/add-not-registered-user",
   authToken,
   async (req, res) => {
@@ -305,6 +306,49 @@ router.get(
 
     if (!email || !username || !password) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+    const isAdmin = await Lobby.verifAdmin(adminEmail, lobby_id);
+    if (!isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You are not the admin of this lobby" });
+    }
+    try {
+      const emailExists = await User.verifEmail(email);
+      const usernameExists = await User.verifUsername(username);
+
+      if (!emailExists) {
+        return res
+          .status(400)
+          .json({ error: "This email has an account! Please login" });
+      }
+
+      if (!usernameExists) {
+        return res
+          .status(400)
+          .json({ error: "This username already exists! Please try another" });
+      }
+      await User.createUser(email, username, password);
+
+      res.status(201).json({ message: "Successfully registered" });
+      const id = await User.getId(email);
+      const result = await Access.addUser(lobby_id, id);
+      if (result.affectedRows > 0) {
+        await Post.initPost(id, lobby_id);
+        return res
+          .status(201)
+          .json({ message: "User added to the lobby successfully" });
+      } else {
+        return res
+          .status(500)
+          .json({ error: "Failed to add user to the lobby" });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+
+      if (!res.headersSent) {
+        return res.status(500).json({ error: error.message });
+      }
     }
   }
 );
