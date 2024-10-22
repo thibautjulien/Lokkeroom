@@ -88,7 +88,7 @@ class Lobby {
       const conn = await connectToDB();
       const result = await conn.query(
         `
-        SELECT u.id, u.username 
+        SELECT u.id, u.username,a.role
         FROM access a 
         JOIN users u ON a.user_id = u.id 
         WHERE a.lobby_id = ?`,
