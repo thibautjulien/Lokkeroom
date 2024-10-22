@@ -69,16 +69,16 @@ class Access {
   static async showAllUser(email) {
     const conn = await connectToDB();
     try {
-      // Obtenir l'ID de l'utilisateur à partir de l'email
       const idFromEmail = await User.getId(email);
-
-      // Récupérer tous les lobbies auxquels cet utilisateur a accès
       const result = await conn.query(
-        "SELECT lobby_id FROM access WHERE user_id = ?",
+        `SELECT a.lobby_id,l.message 
+        FROM access a 
+        JOIN lobbies l
+        WHERE a.lobby_id = l.id AND a.user_id = ?`,
         [idFromEmail]
       );
 
-      return result; // retourne tous les lobby_ids auxquels l'utilisateur a accès
+      return result;
     } catch (error) {
       console.error("Error while fetching lobbies for user:", error);
       throw new Error("Failed to retrieve lobbies for user.");

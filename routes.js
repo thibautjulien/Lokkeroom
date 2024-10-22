@@ -22,11 +22,15 @@ router.post("/register", async (req, res) => {
     const usernameExists = await User.verifUsername(username);
 
     if (!emailExists) {
-      return res.status(400).json({ error: "This email has an account! Please login" });
+      return res
+        .status(400)
+        .json({ error: "This email has an account! Please login" });
     }
 
     if (!usernameExists) {
-      return res.status(400).json({ error: "This username already exists! Please try another" });
+      return res
+        .status(400)
+        .json({ error: "This username already exists! Please try another" });
     }
     await User.createUser(email, username, password);
     res.status(201).json({ message: "Successfully registered" });
@@ -44,7 +48,7 @@ router.post("/login", async (req, res) => {
   }
 
   const maxAttempts = 5;
-  const timeBetweenMaxAttempts = 15 * 60 * 1000;
+  const timeBetweenMaxAttempts = 60 * 60 * 1000;
 
   const userAttempts = loginAttempts[email] || { count: 0, blockedUntil: null };
 
@@ -54,7 +58,7 @@ router.post("/login", async (req, res) => {
   ) {
     return res
       .status(429)
-      .json({ error: "Too many attempts, try again later (15 minutes)" });
+      .json({ error: "Too many attempts, try again later (1 hour)" });
   }
 
   try {
@@ -235,50 +239,75 @@ router.post(
 router.get("/users", authToken, async (req, res) => {
   try {
     const email = req.user.email;
-
-    // Récupérer tous les lobbies auxquels cet utilisateur a accès
     const allLobbies = await Access.showAllUser(email);
 
-    // Vérifier s'il a accès à au moins un lobby
     if (allLobbies.length === 0) {
       return res.status(404).json({ error: "User is not part of any lobby." });
     }
 
     const lobbyUsers = [];
 
-    // Récupérer les utilisateurs pour chaque lobby
     for (const lobby of allLobbies) {
       const lobby_id = lobby.lobby_id;
-
-      // Vérifier si l'utilisateur est admin pour ce lobby
+      const lobbyMsg = lobby.message;
       const isAdmin = await Lobby.verifAdmin(email, lobby_id);
-      if (!isAdmin) {
-        continue; // Passer au lobby suivant s'il n'est pas admin de ce lobby
-      }
 
-      // Obtenir les utilisateurs de ce lobby
-      const users = await Lobby.getUsersLobbyById(lobby_id);
-
-      if (users.length > 0) {
+      let users;
+      if (isAdmin) {
+        users = await Lobby.getUsersLobbyByIdForAdmin(lobby_id);
         lobbyUsers.push({
           lobby_id: lobby_id,
+          message: lobbyMsg,
           users: users,
+        });
+      } else {
+        users = await Lobby.getUsersLobbyByIdForMember(lobby_id);
+        const messages = [];
+
+        for (const user of users) {
+          if (user.mail !== email) {
+            messages.push({
+              username: user.username,
+              message: user.content,
+              role: user.role,
+            });
+          }
+        }
+
+        lobbyUsers.push({
+          lobby_id: lobby_id,
+          lobbyMsg: lobbyMsg,
+          messages: messages,
         });
       }
     }
 
-    // Si aucun utilisateur n'a été trouvé
     if (lobbyUsers.length === 0) {
       return res.status(404).json({ error: "No users found in any lobbies." });
     }
 
-    // Renvoyer les utilisateurs par lobby
     res.json(lobbyUsers);
   } catch (error) {
     console.error("Error fetching users for lobby:", error);
     res.status(500).json({ error: "An error occurred while fetching users." });
   }
 });
+
+//Route Admin add people that have not yet registered to the platform.
+router.get(
+  "/lobby/:lobby_id/add-not-registered-user",
+  authToken,
+  async (req, res) => {
+    const { email, username, password } = req.body;
+    const adminEmail = req.user.email;
+    const lobby_id = req.params.lobby_id;
+    console.log(req.body);
+
+    if (!email || !username || !password) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+  }
+);
 
 async function authToken(req, res, next) {
   const authHeader = req.header("Authorization");

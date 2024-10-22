@@ -83,14 +83,37 @@ class Lobby {
       throw new Error("Error to verif if is it an admin");
     }
   }
-  static async getUsersLobbyById(lobby_id) {
+  static async getUsersLobbyByIdForAdmin(lobby_id) {
     try {
       const conn = await connectToDB();
       const result = await conn.query(
         `
-        SELECT u.id, u.username,a.role
+        SELECT u.id, u.username,u.mail,a.role,p.content,p.updated_at
         FROM access a 
-        JOIN users u ON a.user_id = u.id 
+        JOIN users u 
+        ON a.user_id = u.id 
+        JOIN posts p
+        ON u.id = p.user_id
+        WHERE a.lobby_id = ? `,
+        [lobby_id]
+      );
+      return result;
+    } catch (error) {
+      console.error("Error getting lobby users:", error);
+      throw new Error("Failed to retrieve users for the specified lobby.");
+    }
+  }
+  static async getUsersLobbyByIdForMember(lobby_id) {
+    try {
+      const conn = await connectToDB();
+      const result = await conn.query(
+        `
+        SELECT u.username,a.role,p.content
+        FROM access a 
+        JOIN users u 
+        ON a.user_id = u.id 
+        JOIN posts p
+        ON u.id = p.user_id
         WHERE a.lobby_id = ?`,
         [lobby_id]
       );
