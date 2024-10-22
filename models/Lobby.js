@@ -123,7 +123,6 @@ class Lobby {
       throw new Error("Failed to retrieve users for the specified lobby.");
     }
   }
-
   static async getLastLobbyIdByUser(email) {
     const conn = await connectToDB();
     try {

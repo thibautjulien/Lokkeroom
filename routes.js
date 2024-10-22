@@ -192,6 +192,7 @@ router.post("/lobby/:lobby_id/add-user", authToken, async (req, res, next) => {
     }
     const result = await Access.addUser(lobby_id, id);
     if (result.affectedRows > 0) {
+      await Post.initPost(id, lobby_id);
       return res
         .status(201)
         .json({ message: "User added to the lobby successfully" });
@@ -293,6 +294,76 @@ router.get("/users", authToken, async (req, res) => {
   }
 });
 
+//Route Admin add people that have not yet registered to the platform.
+router.post(
+  "/lobby/:lobby_id/add-not-registered-user",
+  authToken,
+  async (req, res) => {
+    const { email, username, password } = req.body;
+    const adminEmail = req.user.email;
+    const lobby_id = req.params.lobby_id;
+    console.log(req.body);
+
+    // Récupérer tous les lobbies auxquels cet utilisateur a accès
+    const allLobbies = await Access.showAllUser(email);
+
+    // Vérifier s'il a accès à au moins un lobby
+    if (allLobbies.length === 0) {
+      return res.status(404).json({ error: "User is not part of any lobby." });
+    }
+
+    // Si aucun utilisateur n'a été trouvé
+    if (lobbyUsers.length === 0) {
+      return res.status(404).json({ error: "No users found." });
+    }
+
+    const isAdmin = await Lobby.verifAdmin(adminEmail, lobby_id);
+    if (!isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You are not the admin of this lobby" });
+    }
+
+    try {
+      const emailExists = await User.verifEmail(email);
+      const usernameExists = await User.verifUsername(username);
+
+      if (!emailExists) {
+        return res
+          .status(400)
+          .json({ error: "This email has an account! Please login" });
+      }
+
+      if (!usernameExists) {
+        return res
+          .status(400)
+          .json({ error: "This username already exists! Please try another" });
+      }
+      await User.createUser(email, username, password);
+
+      res.status(201).json({ message: "Successfully registered" });
+      const id = await User.getId(email);
+      const result = await Access.addUser(lobby_id, id);
+      if (result.affectedRows > 0) {
+        await Post.initPost(id, lobby_id);
+        return res
+          .status(201)
+          .json({ message: "User added to the lobby successfully" });
+      } else {
+        return res
+          .status(500)
+          .json({ error: "Failed to add user to the lobby" });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+
+      if (!res.headersSent) {
+        return res.status(500).json({ error: error.message });
+      }
+    }
+  }
+);
+
 router.get("/users/:user_id", authToken, async (req, res) => {
   try {
     const email = req.user.email;
@@ -348,6 +419,126 @@ router.get("/users/:user_id", authToken, async (req, res) => {
     res.status(500).json({ error: "An error occurred while fetching user." });
   }
 });
+
+//Route change password
+router.post("/users/changePassword", authToken, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const email = req.user.email;
+
+  if (!oldPassword || !newPassword) {
+    return res
+      .status(400)
+      .json({ error: "Old password and new password are required" });
+  }
+
+  if (newPassword.length < 6) {
+    return res
+      .status(400)
+      .json({ error: "New password must be at least 6 characters long" });
+  }
+
+  try {
+    const user_id = await User.getId(email);
+    await User.changePassword(user_id, oldPassword, newPassword);
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (error) {
+    if (error.message.includes("Old password is incorrect")) {
+      return res.status(400).json({ error: "Old password is incorrect" });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+//Route to add message for a member
+router.post("/lobby/:lobby_id/add-message", authToken, async (req, res) => {
+  const email = req.user.email;
+  const lobby_id = req.params.lobby_id;
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+  try {
+    const user_id = await User.getId(email);
+    const hasAccess = await Access.verifAcces(user_id, lobby_id);
+    const isExist = await Post.verifExistingPost(user_id, lobby_id);
+    if (!hasAccess) {
+      return res
+        .status(403)
+        .json({ error: "User does not have access to this lobby" });
+    }
+    if (isExist) {
+      return res.status(403).json({
+        error: "you can add one message by lobby , please use modify",
+      });
+    }
+    await Post.addPost(user_id, lobby_id, content);
+    return res.status(200).json({ message: "Message added successfully" });
+  } catch (error) {
+    console.error("Error adding message content:", error);
+    return res.status(500).json({ error: "Failed to add message content" });
+  }
+});
+
+//Route to modify message for a member
+router.post("/lobby/:lobby_id/modify-message", authToken, async (req, res) => {
+  const email = req.user.email;
+  const lobby_id = req.params.lobby_id;
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+  try {
+    const user_id = await User.getId(email);
+    const hasAccess = await Access.verifAcces(user_id, lobby_id);
+    if (!hasAccess) {
+      return res
+        .status(403)
+        .json({ error: "User does not have access to this lobby" });
+    }
+    await Post.modifyContent(user_id, lobby_id, content);
+    return res
+      .status(200)
+      .json({ message: "Message content updated successfully" });
+  } catch (error) {
+    console.error("Error impossible modify message content:", error);
+    return res.status(500).json({ error: "Failed to modify message content" });
+  }
+});
+
+//Route to delete message for a member
+router.delete(
+  "/lobby/:lobby_id/delete-message",
+  authToken,
+  async (req, res) => {
+    const email = req.user.email;
+    const lobby_id = req.params.lobby_id;
+
+    try {
+      const user_id = await User.getId(email);
+
+      // Vérifier si l'utilisateur a accès au lobby
+      const hasAccess = await Access.verifAcces(user_id, lobby_id);
+      if (!hasAccess) {
+        return res
+          .status(403)
+          .json({ error: "User does not have access to this lobby" });
+      }
+
+      // Vérifier si le message existe avant de le supprimer
+      const isExist = await Post.verifExistingPost(user_id, lobby_id);
+      if (!isExist) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Supprimer le message
+      await Post.deletePost(user_id, lobby_id); // Assurez-vous que cette méthode existe dans votre classe Post
+      return res.status(200).json({ message: "Message deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      return res.status(500).json({ error: "Failed to delete message" });
+    }
+  }
+);
 
 async function authToken(req, res, next) {
   const authHeader = req.header("Authorization");

@@ -69,19 +69,6 @@ class User {
     }
   }
 
-  static async getUserById(id) {
-    try {
-      const conn = await connectToDB();
-      const result = await conn.query(
-        `SELECT username FROM users WHERE id = ?`,
-        [id]
-      );
-      return result;
-    } catch (error) {
-      console.error("Error: ", error);
-    }
-  }
-
   static async verifUsername(username) {
     const conn = await connectToDB();
     try {
@@ -112,6 +99,19 @@ class User {
     } catch (error) {
       console.error("Cannot get email:", error);
       throw new Error("Database error");
+    }
+  }
+
+  static async getUserById(id) {
+    try {
+      const conn = await connectToDB();
+      const result = await conn.query(
+        `SELECT username FROM users WHERE id = ?`,
+        [id]
+      );
+      return result;
+    } catch (error) {
+      console.error("Error: ", error);
     }
   }
 
