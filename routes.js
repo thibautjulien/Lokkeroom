@@ -353,6 +353,35 @@ router.post(
   }
 );
 
+//Route change password
+router.post("/users/changePassword", authToken, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const email = req.user.email;
+
+  if (!oldPassword || !newPassword) {
+    return res
+      .status(400)
+      .json({ error: "Old password and new password are required" });
+  }
+
+  if (newPassword.length < 6) {
+    return res
+      .status(400)
+      .json({ error: "New password must be at least 6 characters long" });
+  }
+
+  try {
+    const user_id = await User.getId(email);
+    await User.changePassword(user_id, oldPassword, newPassword);
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (error) {
+    if (error.message.includes("Old password is incorrect")) {
+      return res.status(400).json({ error: "Old password is incorrect" });
+    }
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 async function authToken(req, res, next) {
   const authHeader = req.header("Authorization");
   if (!authHeader) {
