@@ -6,10 +6,10 @@ const Lobby = require("./models/Lobby");
 const { getMessageById } = require("./models/Post");
 const Post = require("./models/Post");
 const Access = require("./models/Access");
-
+const loginAttempts = {};
 const router = express.Router();
 
-// Route d'inscription (POST /register)
+// Route to register (POST /register)
 router.post("/register", async (req, res) => {
   const { email, username, password } = req.body;
   console.log(req.body);
@@ -26,7 +26,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// Route de connexion (POST /login)
+// Route to login (POST /login)
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -34,18 +34,42 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
+  const maxAttempts = 5;
+  const timeBetweenMaxAttempts = 15 * 60 * 1000;
+
+  const userAttempts = loginAttempts[email] || { count: 0, blockedUntil: null };
+
+  if (userAttempts.blockedUntil && userAttempts.blockedUntil > Date.now()) {
+    return res
+      .status(429)
+      .json({ error: "Too many attempts, try again later (15 minutes)" });
+  }
+
   try {
     const user = await User.getUserbyEmail(email, password);
+
     if (user === 2) {
       return res.status(404).json({ error: "User not found" });
     }
+
     if (user === 0) {
-      const token = await jwt.sign({ email: email }, process.env.TOKEN_SECRET, {
+      const token = await jwt.sign({ email }, process.env.TOKEN_SECRET, {
         expiresIn: "1h",
       });
-      res.status(200).json({ message: "Login successful", token });
+      delete loginAttempts[email];
+      return res.status(200).json({ message: "Login successful", token });
     } else {
-      res.status(401).json({ error: "Incorrect password" });
+      userAttempts.count++;
+      userAttempts.lastAttempt = Date.now();
+
+      if (userAttempts.count >= maxAttempts) {
+        userAttempts.blockedUntil = Date.now() + timeBetweenMaxAttempts;
+        return res
+          .status(429)
+          .json({ error: "Too many attempts, try again later" });
+      }
+      loginAttempts[email] = userAttempts;
+      return res.status(401).json({ error: "Incorrect password" });
     }
   } catch (error) {
     res.status(500).json({ error: "Login failed" });
