@@ -1,35 +1,54 @@
 const databaseConnection = require("mariadb");
+const { removeUser } = require("./Access");
 
 async function connectToDB() {
+  try {
+    db = await databaseConnection.createConnection({
+      host: "localhost",
+      port: "3306",
+      user: process.env.USER_DB,
+      password: process.env.PASSWORD_DB,
+      database: "lokkeroom",
+    });
+    console.log("[Lokkeroom-Database] : Connected to the database.");
+    return db;
+  } catch (err) {
+    console.log("[Lokkeroom-Database] : Connection failed.", err);
+  }
+}
+class Post {
+  static async getMessageById(id) {
     try {
-      db = await databaseConnection.createConnection({
-        host: "localhost",
-        port: "3306",
-        user: process.env.USER_DB,
-        password: process.env.PASSWORD_DB,
-        database: "lokkeroom",
-      });
-      console.log("[Lokkeroom-Database] : Connected to the database.");
-      return db;
-    } catch (err) {
-      console.log("[Lokkeroom-Database] : Connection failed.", err);
+      const conn = await connectToDB();
+      const result = await conn.query(
+        "SELECT content FROM posts WHERE id = ?",
+        [id]
+      );
+      return result.length > 0 ? result[0] : null;
+    } catch (error) {
+      console.error(`Error to get message from id:${id}`, error);
     }
   }
-class Post {
 
-    static async getMessageById(id){
-        try {
-            const conn = await connectToDB();
-            const result = await conn.query(
-              "SELECT content FROM posts WHERE id = ?",
-              [id]
-            );
-            return result.length > 0 ? result[0] : null;
-          } catch (error) {
-            console.error(`Error to get message from id:${id}`, error);
-          }
+  static async getMessageWithEmailById(id) {
+    try {
+      const conn = await connectToDB();
+      const result = await conn.query(
+        `SELECT u.mail, p.content FROM posts p JOIN users u ON p.user_id = u.id WHERE u.id = ?`,
+        [id]
+      );
+      /*  const result = await conn.query(
+        `SELECT u.username, u.mail, p.content
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        WHERE u.id = ?;`,
+        [id]
+      ); */
+      return result;
+    } catch (error) {
+      console.error("Error:", error);
     }
-
+  }
 }
 
-module.exports = Post
+module.exports = Post;

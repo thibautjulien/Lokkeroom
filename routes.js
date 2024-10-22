@@ -244,6 +244,62 @@ router.get("/users", authToken, async (req, res) => {
   }
 });
 
+router.get("/users/:user_id", authToken, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const id = req.params.user_id;
+
+    // Récupérer tous les lobbies auxquels cet utilisateur a accès
+    const allLobbies = await Access.showAllUser(email);
+
+    // Vérifier s'il a accès à au moins un lobby
+    if (allLobbies.length === 0) {
+      return res.status(404).json({ error: "User  is not part of any lobby." });
+    }
+
+    const lobbyUsers = [];
+
+    // Récupère les utilisateurs de chaque lobby
+    for (const lobby of allLobbies) {
+      const lobby_id = lobby.lobby_id;
+
+      // Vérifier si l'utilisateur est admin ou non
+      const isAdmin = await Lobby.verifAdmin(email, lobby_id);
+
+      // Obtenir les utilisateurs de ce lobby
+      const user = await User.getUserById(id);
+      const messages = await Post.getMessageById(id);
+      const messagesWithEmail = await Post.getMessageWithEmailById(id);
+
+      console.log(messages);
+
+      if (isAdmin) {
+        lobbyUsers.push({
+          id: id,
+          user: user,
+          messages: messagesWithEmail,
+        });
+      } else {
+        lobbyUsers.push({
+          id: id,
+          user: user,
+          messages: messages,
+        });
+      }
+    }
+
+    // Si aucun utilisateur n'a été trouvé
+    if (lobbyUsers.length === 0) {
+      return res.status(404).json({ error: "No users found." });
+    }
+
+    res.json(lobbyUsers);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ error: "An error occurred while fetching user." });
+  }
+});
+
 async function authToken(req, res, next) {
   const authHeader = req.header("Authorization");
   if (!authHeader) {

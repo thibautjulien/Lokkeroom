@@ -68,6 +68,18 @@ class User {
       console.error("Error during login:", error);
     }
   }
+  static async getUserById(id) {
+    try {
+      const conn = await connectToDB();
+      const result = await conn.query(
+        `SELECT username FROM users WHERE id = ?`,
+        [id]
+      );
+      return result;
+    } catch (error) {
+      console.error("Error: ", error);
+    }
+  }
 }
 
 module.exports = User;
